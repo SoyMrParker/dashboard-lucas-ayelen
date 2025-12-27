@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, Target, Plus, Trash2, Save, Calculator, DollarSign, ArrowUpRight, Users, Settings, User, CreditCard, RefreshCcw, Bitcoin, Activity, Layers, PieChart, BarChart2, LineChart, AlertTriangle, RotateCcw, WifiOff, Cloud } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Target, Plus, Trash2, Save, Calculator, DollarSign, ArrowUpRight, Users, Settings, User, CreditCard, RefreshCcw, Bitcoin, Activity, Layers, PieChart, BarChart2, LineChart, AlertTriangle, RotateCcw, WifiOff, Cloud, Moon, Sun } from 'lucide-react';
 
 // --- 1. IMPORTACIONES DE FIREBASE ---
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc, setDoc, query, orderBy } from "firebase/firestore";
 
-// --- 2. TUS CREDENCIALES NUEVAS (Ya configuradas) ---
+// --- 2. TUS CREDENCIALES ---
 const firebaseConfig = {
   apiKey: "AIzaSyCXC88aLiIlPSvafB4-_gWYJyLwigCUuUY",
   authDomain: "finanzas-lucas-ayelen.firebaseapp.com",
@@ -21,7 +21,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// CLAVE FAMILIAR: Esto asegura que ambos vean los mismos datos
 const APP_ID = 'familia-lucas-ayelen'; 
 
 const DashboardFinanciero = () => {
@@ -36,20 +35,44 @@ const DashboardFinanciero = () => {
       const script = document.createElement('script');
       script.id = 'tailwind-cdn';
       script.src = "https://cdn.tailwindcss.com";
+      script.onload = () => {
+          if (window.tailwind) {
+            window.tailwind.config = {
+              darkMode: 'class', 
+            }
+          }
+      };
       document.head.appendChild(script);
     }
   }, []);
 
-  // --- CONEXIÓN A FIREBASE (LOGIN SILENCIOSO) ---
+  // --- SISTEMA DE CARGA DE ESTADO LOCAL ---
+  const loadState = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : defaultValue;
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  // --- ESTADO MODO OSCURO ---
+  const [darkMode, setDarkMode] = useState(() => loadState('darkMode', false));
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
+
+  // --- CONEXIÓN A FIREBASE ---
   useEffect(() => {
     signInAnonymously(auth)
       .then(() => setAuthError(null))
       .catch((error) => {
         console.error("Error Firebase:", error);
         if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/configuration-not-found') {
-          setAuthError("⚠️ ERROR DE PERMISOS: Debes habilitar 'Anónimo' en Firebase Console (Authentication).");
+          setAuthError("⚠️ ERROR DE PERMISOS: Debes habilitar 'Anónimo' en Firebase Console.");
         } else if (error.code === 'permission-denied') {
-           setAuthError("⚠️ ERROR DE REGLAS: Falta configurar reglas en Firestore Database.");
+           setAuthError("⚠️ ERROR DE REGLAS: Falta configurar reglas en Firestore.");
         } else {
           setAuthError(`Error de conexión: ${error.message}`);
         }
@@ -64,7 +87,6 @@ const DashboardFinanciero = () => {
   const [transactions, setTransactions] = useState([]);
   const [cryptoHoldings, setCryptoHoldings] = useState([]);
   
-  // Simulador (Datos locales temporales)
   const [simInitial, setSimInitial] = useState(100000);
   const [simMonthly, setSimMonthly] = useState(20000);
   const [simRate, setSimRate] = useState(35);
@@ -72,10 +94,9 @@ const DashboardFinanciero = () => {
 
   // --- SINCRONIZACIÓN EN TIEMPO REAL ---
   
-  // 1. Configuración General (CORREGIDO: Agregado 'config' al path para evitar error de segmentos)
+  // 1. Configuración General
   useEffect(() => {
     if (!user) return;
-    // CORRECCIÓN AQUÍ: Se agregó 'general_config' al final para que la ruta sea válida (par)
     const settingsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'app_settings', 'general_config');
     const unsub = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -84,17 +105,15 @@ const DashboardFinanciero = () => {
         if (data.savingsGoal) setSavingsGoal(data.savingsGoal);
         if (data.exchangeRate) setExchangeRate(data.exchangeRate);
       } else {
-        // Crear configuración inicial si no existe
         setDoc(settingsRef, { viewCurrency: 'ARS', savingsGoal: 1000000, exchangeRate: 1050 });
       }
     }, (error) => {
-        // Si hay error de permisos al leer
-       if (error.code === 'permission-denied') setAuthError("⚠️ ERROR DE REGLAS: Falta configurar reglas de base de datos en Firestore (Paso 2 de la guía).");
+       if (error.code === 'permission-denied') setAuthError("⚠️ ERROR DE REGLAS: Falta configurar reglas en Firestore.");
     });
     return () => unsub();
   }, [user]);
 
-  // 2. Transacciones (Caja)
+  // 2. Transacciones
   useEffect(() => {
     if (!user) return;
     const q = collection(db, 'artifacts', APP_ID, 'public', 'data', 'transactions');
@@ -116,17 +135,14 @@ const DashboardFinanciero = () => {
     return () => unsub();
   }, [user]);
 
-  // --- FUNCIONES DE GUARDADO (CLOUD) ---
+  // --- GUARDADO ---
   const updateSettings = async (field, value) => {
-    // Actualizamos visualmente al instante
     if(field === 'viewCurrency') setViewCurrency(value);
     if(field === 'savingsGoal') setSavingsGoal(value);
     if(field === 'exchangeRate') setExchangeRate(value);
 
     if (!user) return;
-    // CORRECCIÓN AQUÍ TAMBIÉN: Usar el mismo path corregido
     const settingsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'app_settings', 'general_config');
-    // Usamos setDoc con merge para crear o actualizar
     await setDoc(settingsRef, { [field]: value }, { merge: true });
   };
 
@@ -278,11 +294,12 @@ const DashboardFinanciero = () => {
     };
   }, [totalCashSaved, totalCryptoValueView, cryptoHoldings, cryptoPrices, viewCurrency, exchangeRate]);
 
+  // --- RENDER ---
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-emerald-200">
+    <div className={`min-h-screen font-sans selection:bg-emerald-200 transition-colors duration-300 ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
       {/* BARRA DE ESTADO DE CONEXIÓN */}
-      <div className={`px-4 py-2 text-xs font-bold text-center flex justify-center items-center gap-2 ${authError ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+      <div className={`px-4 py-2 text-xs font-bold text-center flex justify-center items-center gap-2 ${authError ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'}`}>
         {authError ? (
           <span className="flex items-center gap-2 animate-pulse">
             <AlertTriangle size={14}/> {authError}
@@ -294,57 +311,76 @@ const DashboardFinanciero = () => {
         )}
       </div>
 
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="bg-slate-900 text-slate-300 text-xs py-2 px-4 overflow-hidden">
-          <div className="max-w-5xl mx-auto flex justify-between items-center">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 transition-colors duration-300">
+        <div className="bg-slate-900 dark:bg-black text-slate-300 text-xs py-2 px-4 overflow-hidden">
+          {/* Se cambió max-w-5xl a max-w-7xl para más ancho en PC */}
+          <div className="max-w-7xl mx-auto flex justify-between items-center">
              <div className="flex gap-4 md:gap-6 animate-pulse-slow overflow-x-auto whitespace-nowrap scrollbar-hide">
                <span className="flex items-center gap-1 font-mono"><Bitcoin size={14} className="text-yellow-500"/> BTC: <span className="text-white">${cryptoPrices.bitcoin?.usd.toLocaleString()}</span></span>
                <span className="flex items-center gap-1 font-mono"><Activity size={14} className="text-purple-500"/> ETH: <span className="text-white">${cryptoPrices.ethereum?.usd.toLocaleString()}</span></span>
                <span className="flex items-center gap-1 font-mono"><Activity size={14} className="text-cyan-500"/> SOL: <span className="text-white">${cryptoPrices.solana?.usd.toLocaleString()}</span></span>
                <span className="flex items-center gap-1 font-mono"><DollarSign size={14} className="text-green-500"/> USDT: <span className="text-white">${cryptoPrices.tether?.usd.toLocaleString()}</span></span>
              </div>
-             <div className="flex gap-2">
+             <div className="flex gap-2 items-center">
                 <button onClick={fetchPrices} className="hover:text-white transition-colors flex items-center gap-1 ml-2 whitespace-nowrap"><RefreshCcw size={10} className={loadingPrices ? "animate-spin" : ""} /> Actualizar</button>
              </div>
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto px-4 py-4">
+        {/* Se cambió max-w-5xl a max-w-7xl para más ancho en PC */}
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
             <div className="flex items-center gap-3">
               <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-2 rounded-lg text-white shadow-lg"><Users size={24} /></div>
-              <div><h1 className="text-xl font-bold text-slate-900 leading-none">Patrimonio Total</h1><span className="text-xs text-slate-500 font-medium tracking-wide uppercase">LUCAS & AYELEN</span></div>
-              <div className="ml-4 px-4 py-1 bg-slate-100 rounded-full border border-slate-200"><span className="text-xs text-slate-400 uppercase font-bold mr-2">TOTAL ACUMULADO:</span><span className="text-lg font-bold text-slate-800">{formatMoney(netWorth)}</span></div>
+              <div><h1 className="text-xl font-bold leading-none text-slate-900 dark:text-white">Patrimonio Total</h1><span className="text-xs font-medium tracking-wide uppercase text-slate-500 dark:text-slate-400">LUCAS & AYELEN</span></div>
+              <div className="ml-4 px-4 py-1 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600"><span className="text-xs font-bold uppercase mr-2 text-slate-400 dark:text-slate-300">TOTAL ACUMULADO:</span><span className="text-lg font-bold text-slate-800 dark:text-white">{formatMoney(netWorth)}</span></div>
             </div>
-            <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto">
+            <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg w-full md:w-auto overflow-x-auto transition-colors duration-300">
               {['dashboard', 'crypto', 'simulator', 'charts'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 whitespace-nowrap px-4 py-2 rounded-md text-sm font-medium transition-all uppercase ${activeTab === tab ? 'bg-white shadow text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>{tab === 'dashboard' ? 'CAJA DE AHORRO' : tab === 'crypto' ? 'PORTFOLIO CRYPTO' : tab === 'charts' ? 'GRÁFICOS' : 'SIMULADOR'}</button>
+                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 whitespace-nowrap px-4 py-2 rounded-md text-sm font-medium transition-all uppercase ${activeTab === tab ? 'bg-white dark:bg-slate-600 shadow text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white'}`}>{tab === 'dashboard' ? 'CAJA DE AHORRO' : tab === 'crypto' ? 'PORTFOLIO CRYPTO' : tab === 'charts' ? 'GRÁFICOS' : 'SIMULADOR'}</button>
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm bg-slate-50 p-2 rounded-lg border border-slate-200">
-            <div className="flex items-center gap-2 bg-white px-3 py-1 rounded border border-slate-200 shadow-sm"><Settings size={14} className="text-slate-400"/><span className="text-slate-600 font-medium">Cotización Dólar:</span><span className="text-slate-400 font-mono">$</span><input type="number" value={exchangeRate} onChange={(e) => updateSettings('exchangeRate', Number(e.target.value))} className="w-20 font-bold text-slate-700 outline-none border-b border-dotted border-slate-300 focus:border-emerald-500" step="0.01"/></div>
-            <div className="flex items-center gap-2 ml-auto"><span className="text-slate-500 hidden sm:inline">Ver todo en:</span><div className="flex gap-1">{['ARS', 'USD'].map(curr => (<button key={curr} onClick={() => updateSettings('viewCurrency', curr)} className={`px-3 py-1 rounded text-xs font-bold transition-colors border ${viewCurrency === curr ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}>{curr}</button>))}</div></div>
+          <div className="flex flex-wrap items-center gap-4 text-sm bg-slate-50 dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors duration-300">
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded border border-slate-200 dark:border-slate-700 shadow-sm transition-colors duration-300">
+               <Settings size={14} className="text-slate-400"/><span className="font-medium text-slate-600 dark:text-slate-300">Cotización Dólar:</span><span className="font-mono text-slate-400">$</span><input type="number" value={exchangeRate} onChange={(e) => updateSettings('exchangeRate', Number(e.target.value))} className="w-20 font-bold outline-none border-b border-dotted border-slate-300 dark:border-slate-600 focus:border-emerald-500 bg-transparent text-slate-700 dark:text-white" step="0.01"/>
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+                <span className="hidden sm:inline text-slate-500 dark:text-slate-400">Ver todo en:</span>
+                <div className="flex gap-1 mr-4">
+                    {['ARS', 'USD'].map(curr => (<button key={curr} onClick={() => updateSettings('viewCurrency', curr)} className={`px-3 py-1 rounded text-xs font-bold transition-colors border ${viewCurrency === curr ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>{curr}</button>))}
+                </div>
+                {/* BOTÓN MODO OSCURO (REUBICADO Y MÁS VISIBLE) */}
+                <button 
+                  onClick={() => setDarkMode(!darkMode)} 
+                  className={`p-2 rounded-full transition-all border ${darkMode ? 'bg-slate-700 border-slate-600 text-yellow-400 hover:bg-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-orange-500'}`}
+                  title={darkMode ? "Activar Modo Claro" : "Activar Modo Oscuro"}
+                >
+                  {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      {/* Se cambió max-w-5xl a max-w-7xl para más ancho en PC */}
+      <main className="max-w-7xl mx-auto px-4 py-8">
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between h-36 relative overflow-hidden">
-                <div className="flex justify-between items-start z-10"><span className="text-slate-500 text-sm font-medium uppercase tracking-wider">CAJA DE AHORRO</span><Wallet className="text-emerald-500" size={20} /></div>
-                <div className="z-10"><span className="text-3xl font-bold text-slate-900 block tracking-tight truncate">{formatMoney(totalCashSaved)}</span><span className="text-xs text-slate-400 font-medium mt-1 block">{viewCurrency === 'ARS' ? `≈ ${formatMoney(totalCashSaved / exchangeRate, 'USD')}` : `≈ ${formatMoney(totalCashSaved * exchangeRate, 'ARS')}`}</span></div>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between h-36 relative overflow-hidden transition-colors duration-300">
+                <div className="flex justify-between items-start z-10"><span className="text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">CAJA DE AHORRO</span><Wallet className="text-emerald-500" size={20} /></div>
+                <div className="z-10"><span className="text-3xl font-bold block tracking-tight truncate text-slate-900 dark:text-white">{formatMoney(totalCashSaved)}</span><span className="text-xs font-medium mt-1 block text-slate-400 dark:text-slate-500">{viewCurrency === 'ARS' ? `≈ ${formatMoney(totalCashSaved / exchangeRate, 'USD')}` : `≈ ${formatMoney(totalCashSaved * exchangeRate, 'ARS')}`}</span></div>
               </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between h-36">
-                <div className="flex justify-between items-start"><span className="text-slate-500 text-sm font-medium uppercase tracking-wider">OBJETIVO ({viewCurrency})</span><Target className="text-blue-500" size={20} /></div>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between h-36 transition-colors duration-300">
+                <div className="flex justify-between items-start"><span className="text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">OBJETIVO ({viewCurrency})</span><Target className="text-blue-500" size={20} /></div>
                 <div className="w-full">
-                  <div className="flex justify-between items-end mb-2"><input type="text" value={new Intl.NumberFormat('es-AR').format(savingsGoal)} onChange={handleGoalChange} className="text-2xl font-bold text-slate-900 bg-transparent outline-none border-b border-transparent hover:border-slate-300 focus:border-blue-500 transition-colors w-2/3" /><span className="text-sm font-bold text-emerald-600">{progress.toFixed(1)}%</span></div>
-                  <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden relative"><div className="bg-emerald-500 h-4 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div></div>
+                  <div className="flex justify-between items-end mb-2"><input type="text" value={new Intl.NumberFormat('es-AR').format(savingsGoal)} onChange={handleGoalChange} className="text-2xl font-bold bg-transparent outline-none border-b border-transparent hover:border-slate-300 focus:border-blue-500 transition-colors w-2/3 text-slate-900 dark:text-white" /><span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{progress.toFixed(1)}%</span></div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-4 overflow-hidden relative"><div className="bg-emerald-500 h-4 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div></div>
                 </div>
               </div>
-              <div className="bg-slate-900 p-6 rounded-xl shadow-sm text-white flex flex-col justify-between h-36 relative overflow-hidden">
+              <div className="bg-slate-900 dark:bg-black p-6 rounded-xl shadow-sm text-white flex flex-col justify-between h-36 relative overflow-hidden transition-colors duration-300">
                 <div className="z-10 relative h-full flex flex-col justify-center gap-3">
                   <div className="flex justify-between items-center border-b border-slate-700 pb-2"><span className="flex items-center gap-2 text-sm font-medium text-slate-300 uppercase"><User size={14} className="text-blue-400"/> LUCAS</span><span className="font-bold font-mono text-sm">{formatMoney(totalLucas)}</span></div>
                   <div className="flex justify-between items-center"><span className="flex items-center gap-2 text-sm font-medium text-slate-300 uppercase"><User size={14} className="text-pink-400"/> AYELEN</span><span className="font-bold font-mono text-sm">{formatMoney(totalAyelen)}</span></div>
@@ -354,36 +390,36 @@ const DashboardFinanciero = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-1">
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-32">
-                  <div className="bg-slate-50 px-6 py-4 border-b border-slate-100"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Plus size={18} /> Ingreso a Caja</h3></div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden sticky top-32 transition-colors duration-300">
+                  <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-700"><h3 className="font-bold flex items-center gap-2 text-slate-800 dark:text-white"><Plus size={18} /> Ingreso a Caja</h3></div>
                   <form onSubmit={handleAddTransaction} className="p-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
-                      <button type="button" onClick={() => setNewContributor('LUCAS')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newContributor === 'LUCAS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>LUCAS</button>
-                      <button type="button" onClick={() => setNewContributor('AYELEN')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newContributor === 'AYELEN' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>AYELEN</button>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                      <button type="button" onClick={() => setNewContributor('LUCAS')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newContributor === 'LUCAS' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>LUCAS</button>
+                      <button type="button" onClick={() => setNewContributor('AYELEN')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newContributor === 'AYELEN' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>AYELEN</button>
                     </div>
-                    <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Monto</label><div className="relative"><input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="w-full pl-3 pr-20 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-mono text-lg" placeholder="0.00" min="0" step="0.01"/><select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)} className="absolute right-1 top-1 bottom-1 w-18 bg-slate-100 border-none rounded text-xs font-bold text-slate-600 cursor-pointer outline-none hover:bg-slate-200"><option value="ARS">ARS</option><option value="USD">USD</option></select></div></div>
-                    <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Cuenta</label><div className="relative"><input type="text" value={newAccount} onChange={(e) => setNewAccount(e.target.value)} className="w-full pl-10 p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-slate-700" placeholder="Ej: Mercado Pago..." /><CreditCard className="absolute left-3 top-3.5 text-slate-400" size={16} /></div></div>
-                    <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Fecha</label><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-slate-700"/></div>
-                    <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Nota</label><input type="text" value={newNote} onChange={(e) => setNewNote(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-slate-700" placeholder="Ej: Aguinaldo..."/></div>
+                    <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Monto</label><div className="relative"><input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="w-full pl-3 pr-20 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-mono text-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white" placeholder="0.00" min="0" step="0.01"/><select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)} className="absolute right-1 top-1 bottom-1 w-18 border-none rounded text-xs font-bold cursor-pointer outline-none hover:bg-slate-200 dark:hover:bg-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><option value="ARS">ARS</option><option value="USD">USD</option></select></div></div>
+                    <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Cuenta</label><div className="relative"><input type="text" value={newAccount} onChange={(e) => setNewAccount(e.target.value)} className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" placeholder="Ej: Mercado Pago..." /><CreditCard className="absolute left-3 top-3.5 text-slate-400" size={16} /></div></div>
+                    <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Fecha</label><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"/></div>
+                    <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Nota</label><input type="text" value={newNote} onChange={(e) => setNewNote(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" placeholder="Ej: Aguinaldo..."/></div>
                     <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-md hover:shadow-lg transition-all flex justify-center items-center gap-2 mt-2"><Save size={18} /> Guardar</button>
                   </form>
                 </div>
               </div>
               <div className="lg:col-span-2">
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full min-h-[400px]">
-                  <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-800">Historial de Caja</h3><div className="text-xs text-slate-500 bg-slate-200 px-2 py-1 rounded">{transactions.length} registros</div></div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-full min-h-[400px] transition-colors duration-300">
+                  <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-white">Historial de Caja</h3><div className="text-xs font-bold px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300">{transactions.length} registros</div></div>
                   <div className="flex-1 overflow-auto max-h-[600px] p-2">
                     <table className="w-full text-sm text-left border-collapse">
-                      <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0 z-10"><tr><th className="px-3 py-3 rounded-l-lg">Quién</th><th className="px-3 py-3">Fecha</th><th className="px-3 py-3">Concepto</th><th className="px-3 py-3">Cuenta</th><th className="px-3 py-3 text-right">Monto</th><th className="px-3 py-3 rounded-r-lg"></th></tr></thead>
+                      <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 sticky top-0 z-10"><tr><th className="px-3 py-3 rounded-l-lg">Quién</th><th className="px-3 py-3">Fecha</th><th className="px-3 py-3">Concepto</th><th className="px-3 py-3">Cuenta</th><th className="px-3 py-3 text-right">Monto</th><th className="px-3 py-3 rounded-r-lg"></th></tr></thead>
                       <tbody>
                         {[...transactions].sort((a,b) => new Date(b.date) - new Date(a.date)).map((t) => (
-                          <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors group">
-                            <td className="px-3 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${t.contributor === 'LUCAS' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-pink-50 text-pink-700 border border-pink-100'}`}>{t.contributor === 'LUCAS' ? 'L' : 'A'}</span></td>
-                            <td className="px-3 py-3 font-medium text-slate-500 text-xs">{new Date(t.date).toLocaleDateString('es-AR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})}</td>
-                            <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[120px]">{t.note}</td>
-                            <td className="px-3 py-3 text-slate-500 text-xs truncate max-w-[100px]"><div className="flex items-center gap-1"><CreditCard size={12} className="text-slate-400" />{t.account}</div></td>
-                            <td className="px-3 py-3 text-right"><span className={`font-bold ${t.currency === 'USD' ? 'text-emerald-700' : 'text-slate-700'}`}>{t.currency === 'USD' ? 'u$s' : '$'} {new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2 }).format(t.amount)}</span></td>
-                            <td className="px-3 py-3 text-center"><button onClick={() => deleteTransaction(t.id)} className="text-slate-300 hover:text-red-500 p-1 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button></td>
+                          <tr key={t.id} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors group">
+                            <td className="px-3 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${t.contributor === 'LUCAS' ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 border border-blue-100 dark:border-blue-800' : 'bg-pink-50 dark:bg-pink-900 text-pink-700 dark:text-pink-200 border border-pink-100 dark:border-pink-800'}`}>{t.contributor === 'LUCAS' ? 'L' : 'A'}</span></td>
+                            <td className="px-3 py-3 font-medium text-xs text-slate-500 dark:text-slate-400">{new Date(t.date).toLocaleDateString('es-AR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})}</td>
+                            <td className="px-3 py-3 font-medium truncate max-w-[120px] text-slate-800 dark:text-slate-200">{t.note}</td>
+                            <td className="px-3 py-3 text-xs truncate max-w-[100px] text-slate-500 dark:text-slate-400"><div className="flex items-center gap-1"><CreditCard size={12} className="text-slate-400" />{t.account}</div></td>
+                            <td className="px-3 py-3 text-right"><span className={`font-bold ${t.currency === 'USD' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'}`}>{t.currency === 'USD' ? 'u$s' : '$'} {new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2 }).format(t.amount)}</span></td>
+                            <td className="px-3 py-3 text-center"><button onClick={() => deleteTransaction(t.id)} className="p-1 rounded transition-all opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"><Trash2 size={16} /></button></td>
                           </tr>
                         ))}
                       </tbody>
@@ -403,15 +439,15 @@ const DashboardFinanciero = () => {
                   <div className="relative z-10"><span className="text-indigo-200 text-sm font-bold uppercase tracking-wider">Valor de Mercado Actual</span><div className="flex items-baseline gap-2 mt-2"><span className="text-4xl font-bold">{formatMoney(totalCryptoValueView)}</span></div></div>
                   <div className="relative z-10 flex gap-4 text-xs text-indigo-200 mt-4"><span className="bg-indigo-800/50 px-2 py-1 rounded">{viewCurrency === 'ARS' ? `≈ ${formatMoney(totalCryptoValueView / exchangeRate, 'USD')}` : `≈ ${formatMoney(totalCryptoValueView * exchangeRate, 'ARS')}`}</span></div>
                 </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-40 flex flex-col">
-                  <h3 className="font-bold text-slate-700 mb-4">Composición del Portafolio</h3>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm h-40 flex flex-col transition-colors duration-300">
+                  <h3 className="font-bold mb-4 text-slate-700 dark:text-white">Composición del Portafolio</h3>
                   <div className="flex-1 flex items-end gap-2 px-4 pb-2">
                      {['BTC', 'ETH', 'SOL', 'USDT'].map((coin, idx) => {
                         const totalCoin = cryptoHoldings.filter(h => h.coin === coin).reduce((acc, h) => acc + h.amount * getCoinPrice(coin), 0);
                         const pct = totalCryptoValueUSD > 0 ? (totalCoin / totalCryptoValueUSD) * 100 : 0;
                         const colors = ['bg-yellow-500', 'bg-purple-500', 'bg-cyan-500', 'bg-green-500'];
                         return (
-                          <div key={coin} className="flex-1 flex flex-col justify-end group relative"><div className={`w-full ${colors[idx]} rounded-t-md transition-all duration-500`} style={{ height: `${pct || 5}%`, minHeight: '4px' }}></div><span className="text-xs text-center font-bold text-slate-500 mt-1">{coin}</span><span className="text-[10px] text-center text-slate-400">{pct.toFixed(0)}%</span></div>
+                          <div key={coin} className="flex-1 flex flex-col justify-end group relative"><div className={`w-full ${colors[idx]} rounded-t-md transition-all duration-500`} style={{ height: `${pct || 5}%`, minHeight: '4px' }}></div><span className="text-xs text-center font-bold mt-1 text-slate-500 dark:text-slate-400">{coin}</span><span className="text-[10px] text-center text-slate-400">{pct.toFixed(0)}%</span></div>
                         )
                      })}
                   </div>
@@ -420,32 +456,32 @@ const DashboardFinanciero = () => {
 
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1">
-                  <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden sticky top-32">
-                    <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100"><h3 className="font-bold text-indigo-900 flex items-center gap-2"><Bitcoin size={18} /> Nueva Compra</h3></div>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-indigo-900 shadow-sm overflow-hidden sticky top-32 transition-colors duration-300">
+                    <div className="bg-indigo-50 dark:bg-indigo-900/30 px-6 py-4 border-b border-indigo-100 dark:border-indigo-900"><h3 className="font-bold flex items-center gap-2 text-indigo-900 dark:text-indigo-200"><Bitcoin size={18} /> Nueva Compra</h3></div>
                     <form onSubmit={handleAddCrypto} className="p-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
-                        <button type="button" onClick={() => setNewCryptoContributor('LUCAS')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newCryptoContributor === 'LUCAS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>LUCAS</button>
-                        <button type="button" onClick={() => setNewCryptoContributor('AYELEN')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newCryptoContributor === 'AYELEN' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>AYELEN</button>
+                      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                        <button type="button" onClick={() => setNewCryptoContributor('LUCAS')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newCryptoContributor === 'LUCAS' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>LUCAS</button>
+                        <button type="button" onClick={() => setNewCryptoContributor('AYELEN')} className={`py-2 text-sm font-bold rounded-md transition-all uppercase ${newCryptoContributor === 'AYELEN' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>AYELEN</button>
                       </div>
                       <div className="grid grid-cols-4 gap-1">
                          {['BTC', 'ETH', 'SOL', 'USDT'].map(c => (
-                           <button key={c} type="button" onClick={() => setNewCryptoCoin(c)} className={`py-2 text-[10px] sm:text-xs font-bold border rounded-lg transition-colors ${newCryptoCoin === c ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}>{c}</button>
+                           <button key={c} type="button" onClick={() => setNewCryptoCoin(c)} className={`py-2 text-[10px] sm:text-xs font-bold border rounded-lg transition-colors ${newCryptoCoin === c ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600 hover:border-indigo-300'}`}>{c}</button>
                          ))}
                       </div>
-                      <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Cantidad Comprada</label><input type="number" value={newCryptoAmount} onChange={(e) => setNewCryptoAmount(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-lg" placeholder="0.0000" step="0.000001"/></div>
-                      <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Precio de Compra (USD)</label><div className="relative"><span className="absolute left-3 top-3.5 text-slate-400 text-sm">$</span><input type="number" value={newCryptoPrice} onChange={(e) => setNewCryptoPrice(e.target.value)} className="w-full pl-6 p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono" placeholder="Ej: 64000" step="0.01"/></div><p className="text-[10px] text-slate-400 mt-1">Precio unitario al momento de la compra</p></div>
-                      <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Plataforma / Cuenta</label><div className="relative"><input type="text" value={newCryptoAccount} onChange={(e) => setNewCryptoAccount(e.target.value)} className="w-full pl-10 p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" placeholder="Ej: Binance, Lemon..." /><Layers className="absolute left-3 top-3.5 text-slate-400" size={16} /></div></div>
-                      <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Nota</label><input type="text" value={newCryptoNote} onChange={(e) => setNewCryptoNote(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" placeholder="Ej: DCA Semanal"/></div>
+                      <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Cantidad Comprada</label><input type="number" value={newCryptoAmount} onChange={(e) => setNewCryptoAmount(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white" placeholder="0.0000" step="0.000001"/></div>
+                      <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Precio de Compra (USD)</label><div className="relative"><span className="absolute left-3 top-3.5 text-sm text-slate-400">$</span><input type="number" value={newCryptoPrice} onChange={(e) => setNewCryptoPrice(e.target.value)} className="w-full pl-6 p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white" placeholder="Ej: 64000" step="0.01"/></div><p className="text-[10px] text-slate-400 mt-1">Precio unitario al momento de la compra</p></div>
+                      <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Plataforma / Cuenta</label><div className="relative"><input type="text" value={newCryptoAccount} onChange={(e) => setNewCryptoAccount(e.target.value)} className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" placeholder="Ej: Binance, Lemon..." /><Layers className="absolute left-3 top-3.5 text-slate-400" size={16} /></div></div>
+                      <div><label className="block text-xs font-semibold uppercase mb-1 text-slate-500 dark:text-slate-400">Nota</label><input type="text" value={newCryptoNote} onChange={(e) => setNewCryptoNote(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" placeholder="Ej: DCA Semanal"/></div>
                       <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-md hover:shadow-lg transition-all flex justify-center items-center gap-2 mt-2"><Save size={18} /> Registrar Compra</button>
                     </form>
                   </div>
                 </div>
                 <div className="lg:col-span-2">
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full min-h-[400px]">
-                    <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-800">Mis Tenencias (Lotes)</h3></div>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-full min-h-[400px] transition-colors duration-300">
+                    <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-white">Mis Tenencias (Lotes)</h3></div>
                     <div className="flex-1 overflow-auto max-h-[600px] p-2">
                       <table className="w-full text-sm text-left border-collapse">
-                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0 z-10">
+                        <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 sticky top-0 z-10">
                           <tr><th className="px-3 py-3 rounded-l-lg">Moneda</th><th className="px-3 py-3 text-right">Cantidad</th><th className="px-3 py-3 text-right hidden sm:table-cell">Plataforma</th><th className="px-3 py-3 text-right">Valor Hoy</th><th className="px-3 py-3 text-center">P&L</th><th className="px-3 py-3 rounded-r-lg"></th></tr>
                         </thead>
                         <tbody>
@@ -457,13 +493,13 @@ const DashboardFinanciero = () => {
                             const profitPercent = costBasis > 0 ? (profit / costBasis) * 100 : 0;
                             const isProfit = profit >= 0;
                             return (
-                              <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors group">
-                                <td className="px-3 py-3"><div className="flex items-center gap-2"><span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${t.coin === 'BTC' ? 'bg-yellow-500' : t.coin === 'ETH' ? 'bg-purple-600' : t.coin === 'SOL' ? 'bg-cyan-500' : 'bg-green-500'}`}>{t.coin}</span><div className="flex flex-col"><span className="font-bold text-slate-700">{t.coin}</span><span className="text-[10px] text-slate-400">{t.contributor}</span></div></div></td>
-                                <td className="px-3 py-3 text-right font-mono text-slate-600">{formatCrypto(t.amount)}</td>
-                                <td className="px-3 py-3 text-right text-slate-500 text-xs hidden sm:table-cell">{t.account}</td>
-                                <td className="px-3 py-3 text-right font-bold text-indigo-900">{viewCurrency === 'ARS' ? formatMoney(currentValue * exchangeRate) : `$${currentValue.toLocaleString(undefined, {maximumFractionDigits: 2})}`}</td>
-                                <td className="px-3 py-3 text-center"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${isProfit ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{isProfit ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}{profitPercent.toFixed(2)}%</div></td>
-                                <td className="px-3 py-3 text-center"><button onClick={() => deleteCrypto(t.id)} className="text-slate-300 hover:text-red-500 p-1 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button></td>
+                              <tr key={t.id} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors group">
+                                <td className="px-3 py-3"><div className="flex items-center gap-2"><span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${t.coin === 'BTC' ? 'bg-yellow-500' : t.coin === 'ETH' ? 'bg-purple-600' : t.coin === 'SOL' ? 'bg-cyan-500' : 'bg-green-500'}`}>{t.coin}</span><div className="flex flex-col"><span className="font-bold text-slate-700 dark:text-slate-200">{t.coin}</span><span className="text-[10px] text-slate-400">{t.contributor}</span></div></div></td>
+                                <td className="px-3 py-3 text-right font-mono text-slate-600 dark:text-slate-300">{formatCrypto(t.amount)}</td>
+                                <td className="px-3 py-3 text-right text-xs hidden sm:table-cell text-slate-500 dark:text-slate-400">{t.account}</td>
+                                <td className="px-3 py-3 text-right font-bold text-indigo-900 dark:text-indigo-300">{viewCurrency === 'ARS' ? formatMoney(currentValue * exchangeRate) : `$${currentValue.toLocaleString(undefined, {maximumFractionDigits: 2})}`}</td>
+                                <td className="px-3 py-3 text-center"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${isProfit ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>{isProfit ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}{profitPercent.toFixed(2)}%</div></td>
+                                <td className="px-3 py-3 text-center"><button onClick={() => deleteCrypto(t.id)} className="p-1 rounded transition-all opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"><Trash2 size={16} /></button></td>
                               </tr>
                             );
                           })}
@@ -478,7 +514,7 @@ const DashboardFinanciero = () => {
 
         {activeTab === 'simulator' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="bg-slate-900 text-white p-8 rounded-2xl shadow-lg relative overflow-hidden">
+            <div className="bg-slate-900 dark:bg-black text-white p-8 rounded-2xl shadow-lg relative overflow-hidden transition-colors duration-300">
                <div className="absolute top-0 right-0 p-32 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
                <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                  <div>
@@ -513,50 +549,50 @@ const DashboardFinanciero = () => {
         {activeTab === 'charts' && (
           <div className="space-y-6 animate-in fade-in duration-300">
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center">
-                   <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChart size={18} className="text-emerald-600"/> Distribución de Riqueza</h3>
-                   <div className="relative w-48 h-48 rounded-full border-8 border-slate-100 flex items-center justify-center">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center transition-colors duration-300">
+                   <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white"><PieChart size={18} className="text-emerald-600"/> Distribución de Riqueza</h3>
+                   <div className="relative w-48 h-48 rounded-full border-8 border-slate-100 dark:border-slate-700 flex items-center justify-center">
                       <div className="absolute inset-0 rounded-full" style={{ background: netWorth > 0 ? `conic-gradient(#10b981 0% ${(isNaN(totalCashSaved) ? 0 : totalCashSaved / netWorth) * 100}%, #4f46e5 ${(isNaN(totalCashSaved) ? 0 : totalCashSaved / netWorth) * 100}% 100%)` : '#e2e8f0' }}></div>
-                      <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center z-10"><span className="text-xs text-slate-400 font-bold uppercase">Total</span><span className="text-lg font-bold text-slate-800">{new Intl.NumberFormat('es-AR', { notation: "compact", compactDisplay: "short" }).format(netWorth)}</span></div>
+                      <div className="absolute inset-2 bg-white dark:bg-slate-800 rounded-full flex flex-col items-center justify-center z-10"><span className="text-xs font-bold uppercase text-slate-400">Total</span><span className="text-lg font-bold text-slate-800 dark:text-white">{new Intl.NumberFormat('es-AR', { notation: "compact", compactDisplay: "short" }).format(netWorth)}</span></div>
                    </div>
                    <div className="mt-6 w-full space-y-2">
                       {chartsData.distribution.map((d, i) => (
-                         <div key={i} className="flex justify-between items-center text-sm"><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${d.color}`}></div><span className="text-slate-600">{d.name}</span></div><span className="font-bold text-slate-800">{netWorth > 0 ? ((d.value / netWorth) * 100).toFixed(1) : 0}%</span></div>
+                         <div key={i} className="flex justify-between items-center text-sm"><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${d.color}`}></div><span className="text-slate-600 dark:text-slate-300">{d.name}</span></div><span className="font-bold text-slate-800 dark:text-white">{netWorth > 0 ? ((d.value / netWorth) * 100).toFixed(1) : 0}%</span></div>
                       ))}
                    </div>
                 </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                   <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Users size={18} className="text-blue-600"/> Batalla de Ahorristas</h3>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors duration-300">
+                   <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white"><Users size={18} className="text-blue-600"/> Batalla de Ahorristas</h3>
                    <div className="flex-1 flex flex-col justify-center gap-6">
                       {chartsData.contributors.map((c, i) => (
                          <div key={i}>
-                            <div className="flex justify-between mb-1 text-sm font-bold"><span className={c.name === 'LUCAS' ? 'text-blue-700' : 'text-pink-700'}>{c.name}</span><span className="text-slate-500">{formatMoney(c.value)}</span></div>
-                            <div className="w-full bg-slate-100 rounded-full h-6 overflow-hidden relative"><div className={`h-full ${c.color} transition-all duration-1000`} style={{ width: `${netWorth > 0 ? (c.value / netWorth) * 100 : 0}%` }}></div></div>
+                            <div className="flex justify-between mb-1 text-sm font-bold"><span className={c.name === 'LUCAS' ? 'text-blue-700 dark:text-blue-400' : 'text-pink-700 dark:text-pink-400'}>{c.name}</span><span className="text-slate-500 dark:text-slate-400">{formatMoney(c.value)}</span></div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden relative"><div className={`h-full ${c.color} transition-all duration-1000`} style={{ width: `${netWorth > 0 ? (c.value / netWorth) * 100 : 0}%` }}></div></div>
                          </div>
                       ))}
                    </div>
-                   <p className="text-xs text-center text-slate-400 mt-4 italic">¿Quién invita la cena este mes?</p>
+                   <p className="text-xs text-center mt-4 italic text-slate-400">¿Quién invita la cena este mes?</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                   <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Layers size={18} className="text-indigo-600"/> Crypto Mix</h3>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors duration-300">
+                   <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white"><Layers size={18} className="text-indigo-600"/> Crypto Mix</h3>
                    <div className="flex-1 flex items-end gap-3 px-2 pb-2 min-h-[150px]">
                       {chartsData.cryptoMix.map((c, i) => {
                          const pct = totalCryptoValueUSD > 0 ? (c.value / totalCryptoValueView) * 100 : 0;
                          return (
-                            <div key={i} className="flex-1 flex flex-col justify-end group cursor-pointer"><div className="text-xs text-center font-bold text-slate-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{pct.toFixed(0)}%</div><div className={`w-full ${c.color} rounded-t-lg transition-all hover:opacity-80`} style={{ height: `${pct}%`, minHeight: '10px' }}></div><div className="text-[10px] text-center font-bold text-slate-400 mt-2">{c.name}</div></div>
+                            <div key={i} className="flex-1 flex flex-col justify-end group cursor-pointer"><div className="text-xs text-center font-bold mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-300">{pct.toFixed(0)}%</div><div className={`w-full ${c.color} rounded-t-lg transition-all hover:opacity-80`} style={{ height: `${pct}%`, minHeight: '10px' }}></div><div className="text-[10px] text-center font-bold mt-2 text-slate-400">{c.name}</div></div>
                          )
                       })}
                    </div>
                 </div>
              </div>
-             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><LineChart size={18} className="text-slate-600"/> Historia Financiera</h3>
-                 <div className="h-48 flex items-end justify-between gap-1 border-b border-l border-slate-200 p-4 relative">
+             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-colors duration-300">
+                 <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white"><LineChart size={18} className="text-slate-600 dark:text-slate-400"/> Historia Financiera</h3>
+                 <div className="h-48 flex items-end justify-between gap-1 border-b border-l border-slate-200 dark:border-slate-700 p-4 relative">
                     {[...transactions, ...cryptoHoldings].sort((a,b) => new Date(a.date) - new Date(b.date)).slice(-10).map((t, i) => (
-                          <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-2 group"><div className="w-1 md:w-2 bg-slate-300 rounded-full h-1/2 group-hover:bg-indigo-500 transition-colors"></div><span className="text-[8px] md:text-[10px] text-slate-400 -rotate-45 origin-top-left translate-y-4">{new Date(t.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span></div>
+                          <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-2 group"><div className="w-1 md:w-2 bg-slate-300 dark:bg-slate-600 rounded-full h-1/2 group-hover:bg-indigo-500 transition-colors"></div><span className="text-[8px] md:text-[10px] -rotate-45 origin-top-left translate-y-4 text-slate-400">{new Date(t.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span></div>
                     ))}
                  </div>
-                 <p className="text-xs text-slate-400 mt-8 text-center">Visualización simplificada de la actividad reciente.</p>
+                 <p className="text-xs mt-8 text-center text-slate-400">Visualización simplificada de la actividad reciente.</p>
              </div>
           </div>
         )}
