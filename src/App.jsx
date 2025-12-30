@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, Target, Plus, Trash2, Save, Calculator, DollarSign, ArrowUpRight, Users, Settings, User, CreditCard, RefreshCcw, Bitcoin, Activity, Layers, PieChart, BarChart2, LineChart, AlertTriangle, RotateCcw, WifiOff, Cloud, Moon, Sun, Menu } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Target, Plus, Trash2, Save, Calculator, DollarSign, ArrowUpRight, Users, Settings, User, CreditCard, RefreshCcw, Bitcoin, Activity, Layers, PieChart, BarChart2, LineChart, AlertTriangle, RotateCcw, WifiOff, Cloud, Moon, Sun, Sparkles } from 'lucide-react';
 
 // --- 1. IMPORTACIONES DE FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -261,6 +261,8 @@ const DashboardFinanciero = () => {
     let contributed = parseFloat(simInitial || 0);
     const rate = (parseFloat(simRate || 0) / 100) / 12;
     const months = parseInt(simYears || 1) * 12;
+    data.push({ year: 0, balance: current, contributed: contributed }); // Punto inicial
+
     for (let i = 1; i <= months; i++) {
       current = current * (1 + rate) + parseFloat(simMonthly || 0);
       contributed += parseFloat(simMonthly || 0);
@@ -275,7 +277,8 @@ const DashboardFinanciero = () => {
       return { 
         name: coin, 
         value: viewCurrency === 'ARS' ? val * exchangeRate : val,
-        color: coin === 'BTC' ? 'bg-yellow-500' : coin === 'ETH' ? 'bg-purple-600' : coin === 'SOL' ? 'bg-cyan-500' : 'bg-green-500'
+        color: coin === 'BTC' ? 'bg-yellow-500' : coin === 'ETH' ? 'bg-purple-600' : coin === 'SOL' ? 'bg-cyan-500' : 'bg-green-500',
+        textColor: coin === 'BTC' ? 'text-yellow-600 dark:text-yellow-400' : coin === 'ETH' ? 'text-purple-600 dark:text-purple-400' : coin === 'SOL' ? 'text-cyan-600 dark:text-cyan-400' : 'text-green-600 dark:text-green-400'
       };
     }).filter(i => i.value > 0);
     return { 
@@ -284,6 +287,19 @@ const DashboardFinanciero = () => {
       contributors: [{ name: 'LUCAS', value: totalLucas, color: 'bg-blue-500' }, { name: 'AYELEN', value: totalAyelen, color: 'bg-pink-500' }]
     };
   }, [totalCashSaved, totalCryptoValueView, cryptoHoldings, cryptoPrices, viewCurrency, exchangeRate]);
+
+  // --- HELPER GRÁFICO SVG ---
+  const generatePolyline = (data, key, width, height) => {
+    if (data.length === 0) return "";
+    const maxVal = Math.max(...data.map(d => d.balance));
+    const stepX = width / (data.length - 1);
+    
+    return data.map((d, i) => {
+      const x = i * stepX;
+      const y = height - ((d[key] / maxVal) * height); // Invertir Y
+      return `${x},${y}`;
+    }).join(' ');
+  };
 
   // --- RENDERIZADO RESPONSIVO ---
   return (
@@ -322,14 +338,11 @@ const DashboardFinanciero = () => {
                 <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-2 rounded-lg text-white shadow-lg"><Users size={24} /></div>
                 <div><h1 className="text-xl font-bold leading-none text-slate-900 dark:text-white">Patrimonio</h1><span className="text-xs font-medium tracking-wide uppercase text-slate-500 dark:text-slate-400">LUCAS & AYELEN</span></div>
               </div>
-              {/* Total móvil */}
               <div className="md:hidden px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600"><span className="text-sm font-bold text-slate-800 dark:text-white">{formatMoney(netWorth)}</span></div>
             </div>
             
-            {/* Total Desktop */}
             <div className="hidden md:block ml-4 px-4 py-1 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600"><span className="text-xs font-bold uppercase mr-2 text-slate-400 dark:text-slate-300">TOTAL:</span><span className="text-lg font-bold text-slate-800 dark:text-white">{formatMoney(netWorth)}</span></div>
 
-            {/* Menú Scrollable */}
             <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg w-full md:w-auto overflow-x-auto transition-colors duration-300 no-scrollbar">
               {['dashboard', 'crypto', 'simulator', 'charts'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 whitespace-nowrap px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-all uppercase ${activeTab === tab ? 'bg-white dark:bg-slate-600 shadow text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white'}`}>
@@ -356,13 +369,21 @@ const DashboardFinanciero = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between h-32 relative overflow-hidden transition-colors">
                 <div className="flex justify-between items-start z-10"><span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">CAJA AHORRO</span><Wallet className="text-emerald-500" size={20} /></div>
-                <div className="z-10"><span className="text-2xl md:text-3xl font-bold block tracking-tight truncate text-slate-900 dark:text-white">{formatMoney(totalCashSaved)}</span></div>
+                <div className="z-10">
+                  <span className="text-2xl md:text-3xl font-bold block tracking-tight truncate text-slate-900 dark:text-white">{formatMoney(totalCashSaved)}</span>
+                  <span className="text-xs font-medium mt-1 block text-slate-400 dark:text-slate-500">
+                    {viewCurrency === 'ARS' ? `≈ ${formatMoney(totalCashSaved / exchangeRate, 'USD')}` : `≈ ${formatMoney(totalCashSaved * exchangeRate, 'ARS')}`}
+                  </span>
+                </div>
               </div>
               <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between h-32 transition-colors">
                 <div className="flex justify-between items-start"><span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">OBJETIVO</span><Target className="text-blue-500" size={20} /></div>
                 <div className="w-full">
                   <div className="flex justify-between items-end mb-2"><input type="text" value={new Intl.NumberFormat('es-AR').format(savingsGoal)} onChange={handleGoalChange} className="text-xl md:text-2xl font-bold bg-transparent outline-none border-b border-transparent hover:border-slate-300 focus:border-blue-500 transition-colors w-2/3 text-slate-900 dark:text-white" /><span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{progress.toFixed(1)}%</span></div>
-                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden relative"><div className="bg-emerald-500 h-3 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div></div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden relative mb-1"><div className="bg-emerald-500 h-3 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div></div>
+                  <span className="text-xs font-medium block text-slate-400 dark:text-slate-500 text-right">
+                    {viewCurrency === 'ARS' ? `≈ ${formatMoney(savingsGoal / exchangeRate, 'USD')}` : `≈ ${formatMoney(savingsGoal * exchangeRate, 'ARS')}`}
+                  </span>
                 </div>
               </div>
               <div className="bg-slate-900 dark:bg-black p-6 rounded-xl shadow-sm text-white flex flex-col justify-between h-32 relative overflow-hidden transition-colors">
@@ -394,7 +415,7 @@ const DashboardFinanciero = () => {
                 <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-full min-h-[400px] transition-colors">
                   <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-white">Historial de Caja</h3><div className="text-xs font-bold px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300">{transactions.length} registros</div></div>
                   <div className="flex-1 overflow-auto max-h-[600px] p-2">
-                    <table className="w-full text-sm text-left border-collapse min-w-[500px]"> {/* min-w fuerza scroll en móvil */}
+                    <table className="w-full text-sm text-left border-collapse min-w-[500px]">
                       <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 sticky top-0 z-10"><tr><th className="px-3 py-3 rounded-l-lg">Quién</th><th className="px-3 py-3">Fecha</th><th className="px-3 py-3">Concepto</th><th className="px-3 py-3">Cuenta</th><th className="px-3 py-3 text-right">Monto</th><th className="px-3 py-3 rounded-r-lg"></th></tr></thead>
                       <tbody>
                         {[...transactions].sort((a,b) => new Date(b.date) - new Date(a.date)).map((t) => (
@@ -424,17 +445,32 @@ const DashboardFinanciero = () => {
                   <div className="relative z-10"><span className="text-indigo-200 text-xs font-bold uppercase tracking-wider">MERCADO ACTUAL</span><div className="flex items-baseline gap-2 mt-2"><span className="text-3xl font-bold">{formatMoney(totalCryptoValueView)}</span></div></div>
                   <div className="relative z-10 flex gap-4 text-xs text-indigo-200 mt-4"><span className="bg-indigo-800/50 px-2 py-1 rounded">{viewCurrency === 'ARS' ? `≈ ${formatMoney(totalCryptoValueView / exchangeRate, 'USD')}` : `≈ ${formatMoney(totalCryptoValueView * exchangeRate, 'ARS')}`}</span></div>
                 </div>
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm h-36 flex flex-col transition-colors">
-                  <h3 className="font-bold mb-4 text-slate-700 dark:text-white text-sm uppercase">Composición</h3>
-                  <div className="flex-1 flex items-end gap-2 px-4 pb-2">
-                     {['BTC', 'ETH', 'SOL', 'USDT'].map((coin, idx) => {
-                        const totalCoin = cryptoHoldings.filter(h => h.coin === coin).reduce((acc, h) => acc + h.amount * getCoinPrice(coin), 0);
-                        const pct = totalCryptoValueUSD > 0 ? (totalCoin / totalCryptoValueUSD) * 100 : 0;
-                        const colors = ['bg-yellow-500', 'bg-purple-500', 'bg-cyan-500', 'bg-green-500'];
+                
+                {/* COMPOSICIÓN REDISEÑADA (Barras Horizontales) */}
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm h-auto flex flex-col transition-colors">
+                  <h3 className="font-bold mb-4 text-slate-700 dark:text-white text-sm uppercase flex items-center gap-2"><PieChart size={16} /> Composición</h3>
+                  <div className="space-y-3">
+                     {chartsData.cryptoMix.map((coin, idx) => {
+                        const pct = totalCryptoValueUSD > 0 ? (coin.value / (viewCurrency === 'ARS' ? totalCryptoValueUSD * exchangeRate : totalCryptoValueUSD)) * 100 : 0;
                         return (
-                          <div key={coin} className="flex-1 flex flex-col justify-end group relative"><div className={`w-full ${colors[idx]} rounded-t-md transition-all duration-500`} style={{ height: `${pct || 5}%`, minHeight: '4px' }}></div><span className="text-[10px] text-center font-bold mt-1 text-slate-500 dark:text-slate-400">{coin}</span><span className="text-[9px] text-center text-slate-400">{pct.toFixed(0)}%</span></div>
+                          <div key={idx} className="group">
+                             <div className="flex justify-between items-center mb-1 text-xs">
+                                <span className={`font-bold flex items-center gap-1 ${coin.textColor}`}>
+                                   {coin.name === 'BTC' ? <Bitcoin size={12}/> : coin.name === 'ETH' ? <Activity size={12}/> : coin.name === 'SOL' ? <Activity size={12}/> : <DollarSign size={12}/>}
+                                   {coin.name}
+                                </span>
+                                <div className="text-right">
+                                   <span className="font-medium text-slate-700 dark:text-slate-300 mr-2">{formatMoney(coin.value)}</span>
+                                   <span className="text-slate-400 font-mono">{pct.toFixed(1)}%</span>
+                                </div>
+                             </div>
+                             <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                <div className={`h-full rounded-full ${coin.color} transition-all duration-1000 ease-out`} style={{ width: `${pct}%` }}></div>
+                             </div>
+                          </div>
                         )
                      })}
+                     {chartsData.cryptoMix.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No hay activos crypto aún.</p>}
                   </div>
                 </div>
              </div>
@@ -463,7 +499,7 @@ const DashboardFinanciero = () => {
                 </div>
                 <div className="lg:col-span-2">
                   <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-full min-h-[400px] transition-colors">
-                    <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-white">Mis Tenencias</h3></div>
+                    <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-white">Mis Tenencias (Lotes)</h3></div>
                     <div className="flex-1 overflow-auto max-h-[600px] p-2">
                       <table className="w-full text-sm text-left border-collapse min-w-[600px]">
                         <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 sticky top-0 z-10">
@@ -497,33 +533,106 @@ const DashboardFinanciero = () => {
           </div>
         )}
 
+        {/* SIMULADOR REDISEÑADO (Gráfico de Área + Vida) */}
         {activeTab === 'simulator' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="bg-slate-900 dark:bg-black text-white p-8 rounded-2xl shadow-lg relative overflow-hidden transition-colors">
                <div className="absolute top-0 right-0 p-32 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-               <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+               
+               {/* Titulo */}
+               <div className="relative z-10 flex items-center justify-between mb-8">
                  <div>
-                   <h2 className="text-3xl font-bold mb-2 flex items-center gap-2"><Calculator className="text-emerald-400" /> Proyección</h2>
-                   <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><label className="text-xs text-slate-400 uppercase font-bold block mb-1">Capital Inicial</label><input type="number" value={simInitial} onChange={(e) => setSimInitial(Number(e.target.value))} className="w-full bg-transparent text-xl font-bold text-white outline-none border-b border-slate-600 focus:border-emerald-400 transition-colors"/></div>
-                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><label className="text-xs text-slate-400 uppercase font-bold block mb-1">Aporte Mensual</label><input type="number" value={simMonthly} onChange={(e) => setSimMonthly(Number(e.target.value))} className="w-full bg-transparent text-xl font-bold text-white outline-none border-b border-slate-600 focus:border-emerald-400 transition-colors"/></div>
-                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><label className="text-xs text-slate-400 uppercase font-bold block mb-1">Tasa Anual (%)</label><input type="number" value={simRate} onChange={(e) => setSimRate(Number(e.target.value))} className="w-full bg-transparent text-xl font-bold text-emerald-400 outline-none border-b border-slate-600 focus:border-emerald-400 transition-colors"/></div>
-                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><label className="text-xs text-slate-400 uppercase font-bold block mb-1">Años</label><input type="number" value={simYears} onChange={(e) => setSimYears(Number(e.target.value))} className="w-full bg-transparent text-xl font-bold text-white outline-none border-b border-slate-600 focus:border-emerald-400 transition-colors"/></div>
-                   </div>
+                   <h2 className="text-2xl md:text-3xl font-bold flex items-center gap-2"><Calculator className="text-emerald-400" /> Proyección de Futuro</h2>
+                   <p className="text-slate-400 text-xs md:text-sm">Visualiza el poder del interés compuesto en tus inversiones.</p>
                  </div>
-                 <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 h-full flex flex-col justify-between">
-                    <div className="text-center mb-6"><span className="text-sm text-slate-300 font-medium uppercase tracking-wider">Proyección Final</span><div className="text-4xl md:text-5xl font-bold text-emerald-300 mt-2 truncate">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(compoundData.finalBalance)}</div></div>
-                    <div className="flex-1 flex items-end justify-center gap-8 min-h-[150px] pb-4 px-4">
-                       <div className="flex flex-col items-center gap-2 group w-1/3">
-                          <span className="text-xs text-slate-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-center">Tu Esfuerzo</span>
-                          <div className="w-full bg-slate-500/50 hover:bg-slate-500 rounded-t-lg transition-all relative" style={{ height: `${compoundData.finalBalance > 0 ? (compoundData.totalContributed / compoundData.finalBalance) * 100 : 0}%` }}></div>
-                          <span className="text-xs font-bold text-slate-400 uppercase">Ahorro</span>
-                       </div>
-                       <div className="flex flex-col items-center gap-2 group w-1/3">
-                          <span className="text-xs text-emerald-300 mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-center">Interés</span>
-                          <div className="w-full bg-emerald-500 hover:bg-emerald-400 rounded-t-lg transition-all relative" style={{ height: '100%' }}></div>
-                          <span className="text-xs font-bold text-emerald-400 uppercase">Inversión</span>
-                       </div>
+                 <div className="text-right">
+                    <div className="text-xs text-slate-400 uppercase font-bold">Total Proyectado</div>
+                    <div className="text-3xl md:text-5xl font-bold text-emerald-400">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(compoundData.finalBalance)}</div>
+                 </div>
+               </div>
+
+               <div className="relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                 {/* Inputs */}
+                 <div className="space-y-4 lg:col-span-1 bg-white/5 backdrop-blur-sm p-6 rounded-xl border border-white/10">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-300 uppercase font-bold">Capital Inicial</label>
+                      <input type="number" value={simInitial} onChange={(e) => setSimInitial(Number(e.target.value))} className="w-full bg-slate-800/50 text-xl font-bold text-white p-3 rounded-lg border border-slate-700 focus:border-emerald-500 outline-none transition-colors"/>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-300 uppercase font-bold">Aporte Mensual</label>
+                      <input type="number" value={simMonthly} onChange={(e) => setSimMonthly(Number(e.target.value))} className="w-full bg-slate-800/50 text-xl font-bold text-white p-3 rounded-lg border border-slate-700 focus:border-emerald-500 outline-none transition-colors"/>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-300 uppercase font-bold">Tasa Anual %</label>
+                        <input type="number" value={simRate} onChange={(e) => setSimRate(Number(e.target.value))} className="w-full bg-slate-800/50 text-xl font-bold text-emerald-400 p-3 rounded-lg border border-slate-700 focus:border-emerald-500 outline-none transition-colors"/>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-300 uppercase font-bold">Años</label>
+                        <input type="number" value={simYears} onChange={(e) => setSimYears(Number(e.target.value))} className="w-full bg-slate-800/50 text-xl font-bold text-white p-3 rounded-lg border border-slate-700 focus:border-emerald-500 outline-none transition-colors"/>
+                      </div>
+                    </div>
+                 </div>
+
+                 {/* Gráfico SVG Personalizado (Area Chart) */}
+                 <div className="lg:col-span-2 bg-white/5 backdrop-blur-sm p-6 rounded-xl border border-white/10 flex flex-col justify-between relative min-h-[300px]">
+                    
+                    {/* Leyenda */}
+                    <div className="flex gap-6 justify-end text-xs font-bold mb-4">
+                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500"></div> TU ESFUERZO</div>
+                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> INTERÉS GANADO</div>
+                    </div>
+
+                    {/* El Gráfico SVG */}
+                    <div className="flex-1 w-full relative">
+                        <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox={`0 0 ${compoundData.chartData.length * 10} 100`}>
+                           {/* Gradientes */}
+                           <defs>
+                              <linearGradient id="gradientTotal" x1="0" x2="0" y1="0" y2="1">
+                                 <stop offset="0%" stopColor="#10b981" stopOpacity="0.5"/>
+                                 <stop offset="100%" stopColor="#10b981" stopOpacity="0"/>
+                              </linearGradient>
+                           </defs>
+
+                           {/* Linea Capital (Aportado) */}
+                           <polyline
+                              fill="none"
+                              stroke="#64748b"
+                              strokeWidth="2"
+                              strokeDasharray="4"
+                              points={generatePolyline(compoundData.chartData, 'contributed', compoundData.chartData.length * 10, 100)}
+                           />
+
+                           {/* Area Total (Interés) */}
+                           <polygon
+                              fill="url(#gradientTotal)"
+                              points={`0,100 ${generatePolyline(compoundData.chartData, 'balance', compoundData.chartData.length * 10, 100).replace(/ /g, ',')} ${compoundData.chartData.length * 10},100`}
+                           />
+                           <polyline
+                              fill="none"
+                              stroke="#10b981"
+                              strokeWidth="3"
+                              points={generatePolyline(compoundData.chartData, 'balance', compoundData.chartData.length * 10, 100)}
+                           />
+                        </svg>
+                        
+                        {/* Etiquetas Eje X (Años) */}
+                        <div className="absolute bottom-0 w-full flex justify-between text-[10px] text-slate-500 pt-2">
+                           <span>Hoy</span>
+                           <span>{simYears / 2} Años</span>
+                           <span>{simYears} Años</span>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-between items-end border-t border-slate-700 pt-4">
+                        <div>
+                           <div className="text-xs text-slate-400">Total Aportado</div>
+                           <div className="text-xl font-bold text-slate-300">{new Intl.NumberFormat('es-AR', { notation: "compact", compactDisplay: "short" }).format(compoundData.totalContributed)}</div>
+                        </div>
+                        <div className="text-right">
+                           <div className="text-xs text-emerald-400 font-bold mb-1 flex items-center justify-end gap-1"><Sparkles size={12}/> Ganancia Pura</div>
+                           <div className="text-2xl font-bold text-emerald-400">+{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(compoundData.finalBalance - compoundData.totalContributed)}</div>
+                        </div>
                     </div>
                  </div>
                </div>
