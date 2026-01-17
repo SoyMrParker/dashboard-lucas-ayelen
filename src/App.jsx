@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, Target, Plus, Trash2, Save, Calculator, DollarSign, ArrowUpRight, Users, Settings, User, CreditCard, RefreshCcw, Bitcoin, Activity, Layers, PieChart, BarChart2, LineChart, AlertTriangle, RotateCcw, WifiOff, Cloud, Moon, Sun, Sparkles, Minus, Cpu } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Target, Plus, Trash2, Save, Calculator, DollarSign, ArrowUpRight, Users, Settings, User, CreditCard, RefreshCcw, Bitcoin, Activity, Layers, PieChart, BarChart2, LineChart, AlertTriangle, RotateCcw, WifiOff, Cloud, Moon, Sun, Sparkles, Minus, Cpu, Lock, LogOut } from 'lucide-react';
 
 // --- 1. IMPORTACIONES DE FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -23,10 +23,22 @@ const db = getFirestore(app);
 
 const APP_ID = 'familia-lucas-ayelen'; 
 
+// Credenciales Hardcodeadas (Cliente)
+const VALID_USER = "OnePiece";
+const VALID_PASS = "L1bertad";
+
 const DashboardFinanciero = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
+
+  // --- ESTADO DE LOGIN ---
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem('app_is_logged_in') === 'true';
+  });
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // --- AUTO-INSTALADOR DE DISEÑO ---
   useEffect(() => {
@@ -64,6 +76,8 @@ const DashboardFinanciero = () => {
 
   // --- CONEXIÓN FIREBASE ---
   useEffect(() => {
+    if (!isLoggedIn) return;
+
     signInAnonymously(auth)
       .then(() => setAuthError(null))
       .catch((error) => {
@@ -77,7 +91,7 @@ const DashboardFinanciero = () => {
         }
       });
     return onAuthStateChanged(auth, setUser);
-  }, []);
+  }, [isLoggedIn]);
 
   // --- ESTADOS ---
   const [viewCurrency, setViewCurrency] = useState('ARS');
@@ -128,6 +142,25 @@ const DashboardFinanciero = () => {
     return () => unsub();
   }, [user]);
 
+  // --- HANDLE LOGIN ---
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (usernameInput === VALID_USER && passwordInput === VALID_PASS) {
+      setIsLoggedIn(true);
+      localStorage.setItem('app_is_logged_in', 'true');
+      setLoginError('');
+    } else {
+      setLoginError('Credenciales incorrectas. Intenta de nuevo.');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    localStorage.removeItem('app_is_logged_in');
+    setUsernameInput('');
+    setPasswordInput('');
+  };
+
   // --- GUARDADO ---
   const updateSettings = async (field, value) => {
     if(field === 'viewCurrency') setViewCurrency(value);
@@ -143,7 +176,6 @@ const DashboardFinanciero = () => {
     e.preventDefault();
     if (!newAmount || !user) return;
     
-    // Lógica para retiros (negativo)
     const finalAmount = newTransactionType === 'withdrawal' ? -Math.abs(parseFloat(newAmount)) : Math.abs(parseFloat(newAmount));
 
     await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'transactions'), {
@@ -152,14 +184,13 @@ const DashboardFinanciero = () => {
       currency: newCurrency,
       contributor: newContributor,
       account: newAccount || 'General',
-      type: newTransactionType, // 'deposit' or 'withdrawal'
+      type: newTransactionType,
       note: newNote || (newTransactionType === 'withdrawal' ? 'Retiro' : 'Ingreso'),
       createdAt: new Date().toISOString()
     });
     setNewAmount(''); setNewNote(''); setNewAccount('');
   };
 
-  // MODIFICADO: Confirmación antes de borrar
   const deleteTransaction = async (id) => {
     if (window.confirm("¿Estás seguro de eliminar este registro de la Caja?")) {
       if (!user) return;
@@ -171,7 +202,6 @@ const DashboardFinanciero = () => {
     e.preventDefault();
     if (!newCryptoAmount || !newCryptoPrice || !user) return;
 
-    // Lógica para ventas (cantidad negativa)
     const finalAmount = newCryptoType === 'sell' ? -Math.abs(parseFloat(newCryptoAmount)) : Math.abs(parseFloat(newCryptoAmount));
 
     await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'crypto_holdings'), {
@@ -181,14 +211,13 @@ const DashboardFinanciero = () => {
       priceUsd: parseFloat(newCryptoPrice),
       contributor: newCryptoContributor,
       account: newCryptoAccount || 'Exchange',
-      type: newCryptoType, // 'buy' or 'sell'
+      type: newCryptoType,
       note: newCryptoNote || (newCryptoType === 'sell' ? 'Venta' : 'Compra spot'),
       createdAt: new Date().toISOString()
     });
     setNewCryptoAmount(''); setNewCryptoPrice(''); setNewCryptoNote(''); setNewCryptoAccount('');
   };
 
-  // MODIFICADO: Confirmación antes de borrar
   const deleteCrypto = async (id) => {
     if (window.confirm("¿Estás seguro de eliminar este registro de Crypto?")) {
       if (!user) return;
@@ -196,14 +225,13 @@ const DashboardFinanciero = () => {
     }
   };
 
-  // --- API PRECIOS (Added RENDER) ---
+  // --- API PRECIOS ---
   const [cryptoPrices, setCryptoPrices] = useState({ bitcoin: { usd: 0 }, ethereum: { usd: 0 }, solana: { usd: 0 }, tether: { usd: 1.00 }, 'render-token': { usd: 0 } });
   const [loadingPrices, setLoadingPrices] = useState(false);
 
   const fetchPrices = async () => {
     setLoadingPrices(true);
     try {
-      // Added render-token to IDs
       const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,tether,render-token&vs_currencies=usd');
       if (!response.ok) throw new Error("API Limit");
       const data = await response.json();
@@ -219,10 +247,16 @@ const DashboardFinanciero = () => {
       }
     } catch (error) { console.warn("Precios offline"); } finally { setLoadingPrices(false); }
   };
-  useEffect(() => { fetchPrices(); const i = setInterval(fetchPrices, 60000); return () => clearInterval(i); }, []);
+  useEffect(() => { 
+    if(isLoggedIn) {
+      fetchPrices(); 
+      const i = setInterval(fetchPrices, 60000); 
+      return () => clearInterval(i); 
+    }
+  }, [isLoggedIn]);
 
   // --- INPUTS ---
-  const [newTransactionType, setNewTransactionType] = useState('deposit'); // 'deposit' | 'withdrawal'
+  const [newTransactionType, setNewTransactionType] = useState('deposit');
   const [newAmount, setNewAmount] = useState('');
   const [newCurrency, setNewCurrency] = useState('ARS');
   const [newContributor, setNewContributor] = useState('LUCAS');
@@ -230,7 +264,7 @@ const DashboardFinanciero = () => {
   const [newNote, setNewNote] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const [newCryptoType, setNewCryptoType] = useState('buy'); // 'buy' | 'sell'
+  const [newCryptoType, setNewCryptoType] = useState('buy');
   const [newCryptoCoin, setNewCryptoCoin] = useState('BTC');
   const [newCryptoAmount, setNewCryptoAmount] = useState('');
   const [newCryptoPrice, setNewCryptoPrice] = useState(''); 
@@ -299,25 +333,15 @@ const DashboardFinanciero = () => {
 
   const chartsData = useMemo(() => {
     const cryptoMix = ['BTC', 'ETH', 'SOL', 'USDT', 'RENDER'].map(coin => {
-      // Filtrar transacciones para esta moneda
       const coinTxs = cryptoHoldings.filter(h => h.coin === coin);
-      
-      // 1. Cantidad Total Actual
       const totalAmount = coinTxs.reduce((acc, h) => acc + parseFloat(h.amount || 0), 0);
-      
-      // 2. Valor Actual
       const currentMarketPrice = getCoinPrice(coin);
       const currentValue = totalAmount * currentMarketPrice;
 
-      // 3. Calculo de Promedio de Compra (Weighted Average)
-      // Solo consideramos las COMPRAS (monto positivo) para el promedio
       const buys = coinTxs.filter(h => parseFloat(h.amount) > 0);
       const totalBoughtAmount = buys.reduce((acc, h) => acc + parseFloat(h.amount), 0);
       const totalCost = buys.reduce((acc, h) => acc + (parseFloat(h.amount) * parseFloat(h.priceUsd)), 0);
-      
       const avgBuyPrice = totalBoughtAmount > 0 ? totalCost / totalBoughtAmount : 0;
-      
-      // P&L % (Precio Actual vs Promedio Compra)
       const pnlPercent = avgBuyPrice > 0 ? ((currentMarketPrice - avgBuyPrice) / avgBuyPrice) * 100 : 0;
 
       return { 
@@ -326,41 +350,82 @@ const DashboardFinanciero = () => {
         value: viewCurrency === 'ARS' ? currentValue * exchangeRate : currentValue,
         avgBuyPrice: avgBuyPrice,
         pnl: pnlPercent,
-        color: coin === 'BTC' ? 'bg-yellow-500' : coin === 'ETH' ? 'bg-purple-600' : coin === 'SOL' ? 'bg-cyan-500' : coin === 'RENDER' ? 'bg-red-500' : 'bg-green-500',
+        color: coin === 'BTC' ? '#EAB308' : coin === 'ETH' ? '#9333EA' : coin === 'SOL' ? '#06B6D4' : coin === 'RENDER' ? '#EF4444' : '#22C55E',
         textColor: coin === 'BTC' ? 'text-yellow-600 dark:text-yellow-400' : coin === 'ETH' ? 'text-purple-600 dark:text-purple-400' : coin === 'SOL' ? 'text-cyan-600 dark:text-cyan-400' : coin === 'RENDER' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
       };
     }).filter(i => i.value > 0 || i.amount > 0);
 
     return { 
-      distribution: [{ name: 'Caja', value: totalCashSaved, color: 'bg-emerald-500' }, { name: 'Crypto', value: totalCryptoValueView, color: 'bg-indigo-600' }],
+      distribution: [{ name: 'Caja', value: totalCashSaved, color: '#10B981' }, { name: 'Crypto', value: totalCryptoValueView, color: '#4F46E5' }],
       cryptoMix, 
-      contributors: [{ name: 'LUCAS', value: totalLucas, color: 'bg-blue-500' }, { name: 'AYELEN', value: totalAyelen, color: 'bg-pink-500' }]
+      contributors: [{ name: 'LUCAS', value: totalLucas, color: '#3B82F6' }, { name: 'AYELEN', value: totalAyelen, color: '#EC4899' }]
     };
   }, [totalCashSaved, totalCryptoValueView, cryptoHoldings, cryptoPrices, viewCurrency, exchangeRate]);
 
-  // --- HELPER GRÁFICO SVG MEJORADO (CURVAS SUAVES) ---
-  const generatePolyline = (data, key, width, height) => {
-    if (data.length === 0) return "";
-    const maxVal = Math.max(...data.map(d => d.balance));
-    const stepX = width / (data.length - 1);
-    
-    return data.map((d, i) => {
-      const x = i * stepX;
-      const y = height - ((d[key] / maxVal) * height); 
-      return `${x},${y}`;
-    }).join(' ');
+  // --- HELPERS GRAFICOS SVG ---
+  const generateHistoryPath = (data, width, height) => {
+      if (!data || data.length === 0) return "";
+      let acc = 0;
+      const points = data.map(t => { 
+          acc += Math.abs(parseFloat(t.amount || 0)); 
+          return acc; 
+      });
+      const maxVal = Math.max(...points) || 100;
+      const minVal = 0;
+      const range = maxVal - minVal;
+      const stepX = width / (points.length > 1 ? points.length - 1 : 1);
+      
+      if (points.length === 1) return `M 0 ${height} L ${width} ${height - (points[0]/maxVal)*height}`;
+
+      return points.map((val, i) => {
+          const x = i * stepX;
+          const y = height - ((val / maxVal) * height);
+          return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+      }).join(' ');
   };
 
-  // --- RENDERIZADO RESPONSIVO ---
+  // --- LOGIN SCREEN ---
+  if (!isLoggedIn) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-300 ${darkMode ? 'dark bg-slate-900' : 'bg-slate-50'}`}>
+         <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100 dark:border-slate-700">
+            <div className="text-center mb-8">
+               <div className="bg-emerald-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+                 <Lock className="text-white" size={32} />
+               </div>
+               <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Acceso Privado</h1>
+               <p className="text-slate-500 dark:text-slate-400 text-sm mt-2 font-semibold uppercase tracking-wider">
+                  LIBERTAD, MILEI, LUFFY, DIOS, PATRIA Y FAMILIA
+               </p>
+            </div>
+            
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase mb-1 text-slate-500 dark:text-slate-400">Usuario</label>
+                <input type="text" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all" placeholder="Nombre de usuario"/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase mb-1 text-slate-500 dark:text-slate-400">Contraseña</label>
+                <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all" placeholder="••••••••"/>
+              </div>
+              
+              {loginError && <div className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 text-sm rounded-lg flex items-center gap-2"><AlertTriangle size={16} /> {loginError}</div>}
+              <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all active:scale-95">Ingresar</button>
+            </form>
+            <div className="mt-6 text-center">
+              <button onClick={() => setDarkMode(!darkMode)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+            </div>
+         </div>
+      </div>
+    );
+  }
+
+  // --- RENDERIZADO DASHBOARD ---
   return (
     <div className={`min-h-screen font-sans selection:bg-emerald-200 transition-colors duration-300 ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
       <div className={`px-4 py-2 text-xs font-bold text-center flex justify-center items-center gap-2 ${authError ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'}`}>
-        {authError ? (
-          <span className="flex items-center gap-2 animate-pulse"><AlertTriangle size={14}/> {authError}</span>
-        ) : (
-          <span className="flex items-center gap-2"><Cloud size={14}/> Nube Conectada</span>
-        )}
+        {authError ? <span className="flex items-center gap-2 animate-pulse"><AlertTriangle size={14}/> {authError}</span> : <span className="flex items-center gap-2"><Cloud size={14}/> Nube Conectada</span>}
       </div>
 
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 transition-colors duration-300">
@@ -376,6 +441,7 @@ const DashboardFinanciero = () => {
              <div className="flex gap-2 items-center ml-2">
                 <button onClick={() => setDarkMode(!darkMode)} className={`p-1.5 rounded-full border ${darkMode ? 'bg-slate-700 border-slate-600 text-yellow-400' : 'bg-white border-slate-200 text-slate-600'}`}>{darkMode ? <Sun size={12} /> : <Moon size={12} />}</button>
                 <button onClick={fetchPrices} className="hover:text-white transition-colors"><RefreshCcw size={12} className={loadingPrices ? "animate-spin" : ""} /></button>
+                <button onClick={handleLogout} className="text-red-400 hover:text-red-200 ml-2" title="Cerrar Sesión"><LogOut size={14} /></button>
              </div>
           </div>
         </div>
@@ -530,7 +596,7 @@ const DashboardFinanciero = () => {
                                 </div>
                              </div>
                              <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                                <div className={`h-full rounded-full ${coin.color} transition-all duration-1000 ease-out`} style={{ width: `${pct}%` }}></div>
+                                <div className="h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${pct}%`, backgroundColor: coin.color }}></div>
                              </div>
                           </div>
                         )
@@ -621,14 +687,14 @@ const DashboardFinanciero = () => {
           </div>
         )}
 
-        {/* SIMULADOR REDISEÑADO (Gráfico de Área + Vida) */}
+        {/* SIMULADOR REDISEÑADO MEJORADO (BARRAS APILADAS) */}
         {activeTab === 'simulator' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="bg-slate-900 dark:bg-black text-white p-8 rounded-2xl shadow-lg relative overflow-hidden transition-colors duration-300">
                <div className="absolute top-0 right-0 p-32 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
                
                {/* Titulo */}
-               <div className="relative z-10 flex items-center justify-between mb-8">
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
                  <div>
                    <h2 className="text-2xl md:text-3xl font-bold flex items-center gap-2"><Calculator className="text-emerald-400" /> Proyección de Futuro</h2>
                    <p className="text-slate-400 text-xs md:text-sm">Visualiza el poder del interés compuesto en tus inversiones.</p>
@@ -662,54 +728,40 @@ const DashboardFinanciero = () => {
                     </div>
                  </div>
 
-                 {/* Gráfico SVG Personalizado (Area Chart) */}
-                 <div className="lg:col-span-2 bg-white/5 backdrop-blur-sm p-6 rounded-xl border border-white/10 flex flex-col justify-between relative min-h-[300px]">
+                 {/* Gráfico de Barras Apiladas */}
+                 <div className="lg:col-span-2 bg-white/5 backdrop-blur-sm p-6 rounded-xl border border-white/10 flex flex-col justify-between relative min-h-[350px]">
                     
                     {/* Leyenda */}
                     <div className="flex gap-6 justify-end text-xs font-bold mb-4">
-                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500"></div> TU ESFUERZO</div>
-                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> INTERÉS GANADO</div>
+                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-slate-500"></div> CAPITAL</div>
+                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-emerald-500"></div> INTERÉS</div>
                     </div>
 
-                    {/* El Gráfico SVG */}
-                    <div className="flex-1 w-full relative">
-                        <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox={`0 0 ${compoundData.chartData.length * 10} 100`}>
-                           {/* Gradientes */}
-                           <defs>
-                              <linearGradient id="gradientTotal" x1="0" x2="0" y1="0" y2="1">
-                                 <stop offset="0%" stopColor="#10b981" stopOpacity="0.5"/>
-                                 <stop offset="100%" stopColor="#10b981" stopOpacity="0"/>
-                              </linearGradient>
-                           </defs>
+                    {/* El Gráfico de Barras Apiladas */}
+                    <div className="flex-1 w-full flex items-end gap-2 relative">
+                        {compoundData.chartData.map((d, i) => {
+                            if (i === 0) return null; // Saltar año 0 para gráfico
+                            const maxVal = compoundData.finalBalance;
+                            const totalHeight = (d.balance / maxVal) * 100;
+                            const capitalHeight = (d.contributed / d.balance) * 100;
+                            const interestHeight = 100 - capitalHeight;
 
-                           {/* Linea Capital (Aportado) */}
-                           <polyline
-                              fill="none"
-                              stroke="#64748b"
-                              strokeWidth="2"
-                              strokeDasharray="4"
-                              points={generatePolyline(compoundData.chartData, 'contributed', compoundData.chartData.length * 10, 100)}
-                           />
-
-                           {/* Area Total (Interés) */}
-                           <polygon
-                              fill="url(#gradientTotal)"
-                              points={`0,100 ${generatePolyline(compoundData.chartData, 'balance', compoundData.chartData.length * 10, 100).replace(/ /g, ',')} ${compoundData.chartData.length * 10},100`}
-                           />
-                           <polyline
-                              fill="none"
-                              stroke="#10b981"
-                              strokeWidth="3"
-                              points={generatePolyline(compoundData.chartData, 'balance', compoundData.chartData.length * 10, 100)}
-                           />
-                        </svg>
-                        
-                        {/* Etiquetas Eje X (Años) */}
-                        <div className="absolute bottom-0 w-full flex justify-between text-[10px] text-slate-500 pt-2">
-                           <span>Hoy</span>
-                           <span>{simYears / 2} Años</span>
-                           <span>{simYears} Años</span>
-                        </div>
+                            return (
+                                <div key={i} className="flex-1 flex flex-col justify-end group cursor-pointer relative" style={{ height: `${totalHeight}%` }}>
+                                    {/* Tooltip */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black text-xs p-2 rounded hidden group-hover:block whitespace-nowrap z-20 shadow-lg">
+                                        <div className="text-emerald-400 font-bold">Año {i}</div>
+                                        <div>Total: {new Intl.NumberFormat('es-AR', { notation: "compact" }).format(d.balance)}</div>
+                                        <div className="text-[10px] text-slate-400">Cap: {new Intl.NumberFormat('es-AR', { notation: "compact" }).format(d.contributed)}</div>
+                                    </div>
+                                    
+                                    {/* Barra Interés (Arriba) */}
+                                    <div className="w-full bg-emerald-500/90 hover:bg-emerald-400 rounded-t-sm transition-all" style={{ height: `${interestHeight}%` }}></div>
+                                    {/* Barra Capital (Abajo) */}
+                                    <div className="w-full bg-slate-600/80 hover:bg-slate-500 rounded-b-sm transition-all" style={{ height: `${capitalHeight}%` }}></div>
+                                </div>
+                            )
+                        })}
                     </div>
 
                     <div className="mt-4 flex justify-between items-end border-t border-slate-700 pt-4">
@@ -728,9 +780,12 @@ const DashboardFinanciero = () => {
           </div>
         )}
 
+        {/* SECTION CHARTS IMPROVED */}
         {activeTab === 'charts' && (
           <div className="space-y-6 animate-in fade-in duration-300">
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                {/* 1. Distribución */}
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center transition-colors duration-300">
                    <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white"><PieChart size={18} className="text-emerald-600"/> Distribución de Riqueza</h3>
                    <div className="relative w-48 h-48 rounded-full border-8 border-slate-100 dark:border-slate-700 flex items-center justify-center">
@@ -739,42 +794,92 @@ const DashboardFinanciero = () => {
                    </div>
                    <div className="mt-6 w-full space-y-2">
                       {chartsData.distribution.map((d, i) => (
-                         <div key={i} className="flex justify-between items-center text-sm"><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${d.color}`}></div><span className="text-slate-600 dark:text-slate-300">{d.name}</span></div><span className="font-bold text-slate-800 dark:text-white">{netWorth > 0 ? ((d.value / netWorth) * 100).toFixed(1) : 0}%</span></div>
+                         <div key={i} className="flex justify-between items-center text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }}></div><span className="text-slate-600 dark:text-slate-300">{d.name}</span></div><span className="font-bold text-slate-800 dark:text-white">{netWorth > 0 ? ((d.value / netWorth) * 100).toFixed(1) : 0}%</span></div>
                       ))}
                    </div>
                 </div>
+
+                {/* 2. Batalla */}
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors duration-300">
                    <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white"><Users size={18} className="text-blue-600"/> Batalla de Ahorristas</h3>
                    <div className="flex-1 flex flex-col justify-center gap-6">
                       {chartsData.contributors.map((c, i) => (
                          <div key={i}>
                             <div className="flex justify-between mb-1 text-sm font-bold"><span className={c.name === 'LUCAS' ? 'text-blue-700 dark:text-blue-400' : 'text-pink-700 dark:text-pink-400'}>{c.name}</span><span className="text-slate-500 dark:text-slate-400">{formatMoney(c.value)}</span></div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden relative"><div className={`h-full ${c.color} transition-all duration-1000`} style={{ width: `${netWorth > 0 ? (c.value / netWorth) * 100 : 0}%` }}></div></div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden relative"><div className="h-full transition-all duration-1000" style={{ width: `${netWorth > 0 ? (c.value / netWorth) * 100 : 0}%`, backgroundColor: c.color }}></div></div>
                          </div>
                       ))}
                    </div>
                    <p className="text-xs text-center mt-4 italic text-slate-400">¿Quién invita la cena este mes?</p>
                 </div>
+
+                {/* 3. Crypto Mix (BARRAS VERTICALES) */}
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors duration-300">
                    <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white"><Layers size={18} className="text-indigo-600"/> Crypto Mix</h3>
                    <div className="flex-1 flex items-end gap-3 px-2 pb-2 min-h-[150px]">
                       {chartsData.cryptoMix.map((c, i) => {
                          const pct = totalCryptoValueUSD > 0 ? (c.value / totalCryptoValueView) * 100 : 0;
                          return (
-                            <div key={i} className="flex-1 flex flex-col justify-end group cursor-pointer"><div className="text-xs text-center font-bold mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-300">{pct.toFixed(0)}%</div><div className={`w-full ${c.color} rounded-t-lg transition-all hover:opacity-80`} style={{ height: `${pct}%`, minHeight: '10px' }}></div><div className="text-[10px] text-center font-bold mt-2 text-slate-400">{c.name}</div></div>
+                            <div key={i} className="flex-1 flex flex-col justify-end group cursor-pointer">
+                                <div className="text-xs text-center font-bold mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-300">{pct.toFixed(0)}%</div>
+                                <div className="w-full rounded-t-lg transition-all hover:opacity-80" style={{ height: `${pct || 1}%`, minHeight: '4px', backgroundColor: c.color }}></div>
+                                <div className="text-[10px] text-center font-bold mt-2 text-slate-400 truncate">{c.name}</div>
+                            </div>
                          )
                       })}
+                      {chartsData.cryptoMix.length === 0 && <div className="w-full text-center text-slate-400 text-xs">Sin datos</div>}
                    </div>
                 </div>
              </div>
+
+             {/* 4. Historia Financiera (LINE CHART SVG ARREGLADO) */}
              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-colors duration-300">
                  <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white"><LineChart size={18} className="text-slate-600 dark:text-slate-400"/> Historia Financiera</h3>
-                 <div className="h-48 flex items-end justify-between gap-1 border-b border-l border-slate-200 dark:border-slate-700 p-4 relative">
-                    {[...transactions, ...cryptoHoldings].sort((a,b) => new Date(a.date) - new Date(b.date)).slice(-10).map((t, i) => (
-                          <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-2 group"><div className="w-1 md:w-2 bg-slate-300 dark:bg-slate-600 rounded-full h-1/2 group-hover:bg-indigo-500 transition-colors"></div><span className="text-[8px] md:text-[10px] -rotate-45 origin-top-left translate-y-4 text-slate-400">{new Date(t.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span></div>
-                    ))}
+                 <div className="h-64 flex items-end justify-between gap-1 border-b border-l border-slate-200 dark:border-slate-700 p-4 relative">
+                    {(() => {
+                        const historyData = [...transactions, ...cryptoHoldings]
+                            .sort((a,b) => new Date(a.date) - new Date(b.date))
+                            .slice(-20); // Last 20
+                        
+                        if (historyData.length < 2) return <div className="flex w-full h-full items-center justify-center text-slate-400">Insuficientes datos para graficar</div>;
+
+                        return (
+                          <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox={`0 0 ${historyData.length * 20} 100`}>
+                             {/* Grid Lines */}
+                             <line x1="0" y1="25" x2="100%" y2="25" stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeDasharray="4"/>
+                             <line x1="0" y1="50" x2="100%" y2="50" stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeDasharray="4"/>
+                             <line x1="0" y1="75" x2="100%" y2="75" stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeDasharray="4"/>
+
+                             {/* Path */}
+                             <path
+                                d={generateHistoryPath(historyData, historyData.length * 20, 100)}
+                                fill="none"
+                                stroke="#6366f1"
+                                strokeWidth="2"
+                                className="drop-shadow-sm"
+                             />
+                             
+                             {/* Dots */}
+                             {historyData.map((_, i) => {
+                                let acc = 0; 
+                                // Recalculate accumulation for Y position
+                                const points = historyData.map(t => { acc += Math.abs(parseFloat(t.amount || 0)); return acc; });
+                                const maxVal = Math.max(...points) || 100;
+                                const val = points[i];
+                                const x = i * (historyData.length * 20 / (historyData.length - 1));
+                                const y = 100 - (val / maxVal) * 100; 
+                                
+                                return (
+                                  <circle key={i} cx={x} cy={y} r="3" className="fill-indigo-600 stroke-white dark:stroke-slate-800 hover:scale-150 transition-transform cursor-pointer">
+                                     <title>{new Date(historyData[i].date).toLocaleDateString()}: {formatMoney(val)}</title>
+                                  </circle>
+                                )
+                             })}
+                          </svg>
+                        )
+                    })()}
                  </div>
-                 <p className="text-xs mt-8 text-center text-slate-400">Visualización simplificada de la actividad reciente.</p>
+                 <p className="text-xs mt-4 text-center text-slate-400">Evolución de valor acumulado (estimado).</p>
              </div>
           </div>
         )}
